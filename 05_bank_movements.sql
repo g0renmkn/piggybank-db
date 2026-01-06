@@ -1,5 +1,5 @@
 -- Bank movements table
--- This table stores all movements (transactions) for all bank accounts
+-- This table stores all movements (transactions) for all accounts
 
 CREATE TABLE IF NOT EXISTS bank_movements (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS bank_movements (
     INDEX idx_date (date),
     INDEX idx_category (category),
     INDEX idx_periodicity (periodicity),
-    FOREIGN KEY (account_id) REFERENCES bank_accounts(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     FOREIGN KEY (category) REFERENCES data_mov_categories(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     FOREIGN KEY (periodicity) REFERENCES data_mov_periodicities(id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
