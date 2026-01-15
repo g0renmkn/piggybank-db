@@ -1,6 +1,6 @@
 -- Initialization script for piggybank database
 -- This script populates the database with predefined data
--- Run this after all table creation scripts (01-06)
+-- Run this after all table creation scripts (01-07)
 
 -- ============================================================================
 -- Populate Categories
