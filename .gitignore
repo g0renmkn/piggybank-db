@@ -1,0 +1,7 @@
+# Remove backup files
+*~
+*.bak
+
+# Remove any possible data I don't want filtered into github
+*.csv
+
