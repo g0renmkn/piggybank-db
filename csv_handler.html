@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CSV Accounts & Movements Viewer</title>
+    <style>
+      body {
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+        margin: 0;
+        background: #15131b;
+        color: #c9c6d1;
+      }
+      .page {
+        max-width: 1100px;
+        margin: 32px auto;
+        padding: 24px 28px;
+        background: #1f1c27;
+        border-radius: 12px;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+      }
+      h1 {
+        margin-bottom: 8px;
+        font-size: 24px;
+        color: #d7d2e3;
+      }
+      .note {
+        color: #9a96a8;
+        font-size: 13px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .controls input[type="file"] {
+        padding: 6px;
+        background: #211f2b;
+        border: 1px solid #3a3646;
+        border-radius: 8px;
+        color: #c9c6d1;
+      }
+      .controls input[type="file"]::file-selector-button {
+        border: 1px solid #4a4458;
+        background: #2a2635;
+        color: #c9c6d1;
+        padding: 6px 10px;
+        border-radius: 6px;
+        margin-right: 10px;
+        cursor: pointer;
+      }
+      .controls input[type="file"]::file-selector-button:hover {
+        background: #342f43;
+        border-color: #5b546b;
+      }
+      .controls input[type="text"] {
+        width: 60px;
+        padding: 6px 8px;
+        border: 1px solid #3a3646;
+        border-radius: 8px;
+        background: #211f2b;
+        color: #c9c6d1;
+      }
+      button {
+        border: 1px solid #4a4458;
+        background: #2b2636;
+        color: #c9c6d1;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button:hover {
+        background: #352f45;
+        border-color: #5b546b;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 12px;
+        background: #1a1823;
+      }
+      th,
+      td {
+        border: 1px solid #332f3d;
+        padding: 6px 8px;
+        text-align: left;
+        font-size: 14px;
+      }
+      th {
+        background: #262233;
+        color: #cfd9ff;
+      }
+      .error {
+        color: #e8a7c5;
+        margin-top: 8px;
+      }
+      .panel {
+        margin-top: 20px;
+      }
+      .panel textarea {
+        width: 100%;
+        min-height: 160px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        padding: 10px;
+        border: 1px solid #3a3646;
+        border-radius: 8px;
+        background: #211f2b;
+        color: #c9c6d1;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin: 16px 0 20px;
+      }
+      .tab-button {
+        border: 1px solid #4a4458;
+        background: #2a2635;
+        color: #c9c6d1;
+        padding: 8px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .tab-button.active {
+        background: #342f43;
+        border-color: #5b546b;
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>CSV Accounts & Movements Viewer</h1>
+      <p class="note">
+        Load CSV files and view parsed data. Accounts get incremental IDs.
+      </p>
+
+      <div class="tabs">
+        <button type="button" class="tab-button active" data-tab="accounts">
+          Accounts
+        </button>
+        <button type="button" class="tab-button" data-tab="movements">
+          Movements
+        </button>
+      </div>
+
+      <section id="tab-accounts" class="tab-content active">
+        <div class="controls">
+          <input type="file" id="csvFile-accounts" accept=".csv,text/csv" />
+          <label for="delimiter-accounts">Delimiter:</label>
+          <input type="text" id="delimiter-accounts" value="," maxlength="1" />
+          <button type="button" id="parseBtn-accounts">Parse CSV</button>
+          <button type="button" id="sqlBtn-accounts">Generate SQL</button>
+          <button type="button" id="clearBtn-accounts">Clear</button>
+        </div>
+
+        <div id="error-accounts" class="error"></div>
+        <div id="tableContainer-accounts"></div>
+        <div class="panel">
+          <h2>Generated SQL</h2>
+          <textarea id="sqlOutput-accounts" readonly></textarea>
+        </div>
+      </section>
+
+      <section id="tab-movements" class="tab-content">
+        <div class="controls">
+          <input type="file" id="csvFile-movements" accept=".csv,text/csv" />
+          <label for="delimiter-movements">Delimiter:</label>
+          <input type="text" id="delimiter-movements" value="," maxlength="1" />
+          <button type="button" id="parseBtn-movements">Parse CSV</button>
+          <button type="button" id="sqlBtn-movements">Generate SQL</button>
+          <button type="button" id="clearBtn-movements">Clear</button>
+        </div>
+
+        <div id="error-movements" class="error"></div>
+        <div id="tableContainer-movements"></div>
+        <div class="panel">
+          <h2>Generated SQL</h2>
+          <textarea id="sqlOutput-movements" readonly></textarea>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const state = {
+        accounts: {
+          headers: [],
+          rows: [],
+          idToName: new Map(),
+        },
+        movements: {
+          headers: [],
+          rows: [],
+        },
+      };
+
+      const tabButtons = document.querySelectorAll(".tab-button");
+      tabButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          tabButtons.forEach((btn) => btn.classList.remove("active"));
+          button.classList.add("active");
+          const target = button.dataset.tab;
+          document.querySelectorAll(".tab-content").forEach((section) => {
+            section.classList.toggle(
+              "active",
+              section.id === `tab-${target}`
+            );
+          });
+        });
+      });
+
+      function parseCSV(text, delimiter) {
+        const rows = [];
+        let row = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i += 1) {
+          const char = text[i];
+          const next = text[i + 1];
+
+          if (char === "\"") {
+            if (inQuotes && next === "\"") {
+              current += "\"";
+              i += 1;
+            } else {
+              inQuotes = !inQuotes;
+            }
+            continue;
+          }
+
+          if (char === "\n" || char === "\r") {
+            if (char === "\r" && next === "\n") {
+              i += 1;
+            }
+            if (inQuotes) {
+              current += "\n";
+              continue;
+            }
+            row.push(current);
+            if (row.some((cell) => cell.trim() !== "")) {
+              rows.push(row);
+            }
+            row = [];
+            current = "";
+            continue;
+          }
+
+          if (char === delimiter && !inQuotes) {
+            row.push(current);
+            current = "";
+            continue;
+          }
+
+          current += char;
+        }
+        if (current.length > 0 || row.length > 0) {
+          row.push(current);
+          if (row.some((cell) => cell.trim() !== "")) {
+            rows.push(row);
+          }
+        }
+        return rows;
+      }
+
+      function normalizeHeader(header) {
+        return header
+          .replace(/^\uFEFF/, "")
+          .trim()
+          .toLowerCase()
+          .replace(/[\s-]+/g, "_");
+      }
+
+      function renderTable(rows, container, valueTransform) {
+        if (rows.length === 0) {
+          container.innerHTML = "<p>No rows to display.</p>";
+          return;
+        }
+        const rawHeaders = rows[0];
+        const dataRows = rows.slice(1);
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        rawHeaders.forEach((header) => {
+          const th = document.createElement("th");
+          th.textContent = header;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        dataRows.forEach((row) => {
+          const tr = document.createElement("tr");
+          rawHeaders.forEach((header, idx) => {
+            const td = document.createElement("td");
+            const rawValue = row[idx] || "";
+            const displayValue = valueTransform
+              ? valueTransform(header, rawValue)
+              : rawValue;
+            td.textContent = displayValue;
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.innerHTML = "";
+        container.appendChild(table);
+      }
+
+      function escapeSqlString(value) {
+        return value.replace(/'/g, "''");
+      }
+
+      function toSqlValue(value) {
+        const trimmed = value.trim();
+        if (trimmed === "") {
+          return "NULL";
+        }
+        if (/^[-+]?\d+(\.\d+)?$/.test(trimmed)) {
+          return trimmed;
+        }
+        return `'${escapeSqlString(trimmed)}'`;
+      }
+
+      function generateAccountsSql(headers, rows) {
+        const normalizedHeaders = headers.map(normalizeHeader);
+        const nameIndex = normalizedHeaders.indexOf("name");
+        const typeIndex = normalizedHeaders.indexOf("account_type");
+        const ibanIndex = normalizedHeaders.indexOf("iban");
+        const closedIndex = normalizedHeaders.indexOf("closed");
+        const commentsIndex = normalizedHeaders.indexOf("comments");
+
+        if (nameIndex === -1 || typeIndex === -1 || ibanIndex === -1) {
+          return {
+            sql: "",
+            error: "Accounts CSV must include name, account_type, and iban.",
+          };
+        }
+
+        const lines = rows.map((row) => {
+          const name = toSqlValue(row[nameIndex] || "");
+          const accountType = toSqlValue(row[typeIndex] || "");
+          const iban = toSqlValue(row[ibanIndex] || "");
+          const closed = closedIndex !== -1 ? toSqlValue(row[closedIndex] || "") : "NULL";
+          const comments =
+            commentsIndex !== -1 ? toSqlValue(row[commentsIndex] || "") : "NULL";
+          return `INSERT INTO accounts (name, account_type, iban, closed, comments) VALUES (${name}, ${accountType}, ${iban}, ${closed}, ${comments});`;
+        });
+        return { sql: lines.join("\n"), error: "" };
+      }
+
+      function generateMovementsSql(headers, rows) {
+        const normalizedHeaders = headers.map(normalizeHeader);
+        const accountIndex = normalizedHeaders.indexOf("account_id");
+        const dateIndex = normalizedHeaders.indexOf("date");
+        const categoryIndex = normalizedHeaders.indexOf("category");
+        const periodicityIndex = normalizedHeaders.indexOf("periodicity");
+        const descriptionIndex = normalizedHeaders.indexOf("description");
+        const valueIndex = normalizedHeaders.indexOf("value");
+        const notesIndex = normalizedHeaders.indexOf("notes");
+
+        if (
+          accountIndex === -1 ||
+          dateIndex === -1 ||
+          categoryIndex === -1 ||
+          descriptionIndex === -1 ||
+          valueIndex === -1
+        ) {
+          return {
+            sql: "",
+            error:
+              "Movements CSV must include account_id, date, category, description, and value.",
+          };
+        }
+
+        const lines = rows.map((row) => {
+          const accountId = toSqlValue(row[accountIndex] || "");
+          const dateValue = toSqlValue(row[dateIndex] || "");
+          const category = toSqlValue(row[categoryIndex] || "");
+          const periodicity =
+            periodicityIndex !== -1 ? toSqlValue(row[periodicityIndex] || "") : "NULL";
+          const description = toSqlValue(row[descriptionIndex] || "");
+          const value = toSqlValue(row[valueIndex] || "");
+          const notes = notesIndex !== -1 ? toSqlValue(row[notesIndex] || "") : "NULL";
+          return `INSERT INTO bank_movements (account_id, date, category, periodicity, description, value, notes) VALUES (${accountId}, ${dateValue}, ${category}, ${periodicity}, ${description}, ${value}, ${notes});`;
+        });
+        return { sql: lines.join("\n"), error: "" };
+      }
+
+      function renderAccountsTable(rawRows) {
+        const container = document.getElementById("tableContainer-accounts");
+        if (rawRows.length === 0) {
+          container.innerHTML = "<p>No rows to display.</p>";
+          return;
+        }
+        const rawHeaders = rawRows[0];
+        const dataRows = rawRows.slice(1);
+        const normalizedHeaders = rawHeaders.map(normalizeHeader);
+        const nameIndex = normalizedHeaders.indexOf("name");
+
+        const displayHeaders = ["id"];
+        rawHeaders.forEach((header) => {
+          displayHeaders.push(header);
+        });
+
+        state.accounts.idToName.clear();
+        dataRows.forEach((row, index) => {
+          const idValue = String(index + 1);
+          const nameValue = nameIndex !== -1 ? (row[nameIndex] || "").trim() : "";
+          if (nameValue) {
+            state.accounts.idToName.set(idValue, nameValue);
+          }
+        });
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        displayHeaders.forEach((header) => {
+          const th = document.createElement("th");
+          th.textContent = header;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        dataRows.forEach((row, index) => {
+          const tr = document.createElement("tr");
+          const displayRow = [String(index + 1), ...row];
+          displayHeaders.forEach((_, idx) => {
+            const td = document.createElement("td");
+            td.textContent = displayRow[idx] || "";
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.innerHTML = "";
+        container.appendChild(table);
+      }
+
+      function movementDisplayValue(header, rawValue) {
+        const normalizedHeader = normalizeHeader(header);
+        if (normalizedHeader === "account_id") {
+          const key = rawValue.trim();
+          if (state.accounts.idToName.has(key)) {
+            return state.accounts.idToName.get(key);
+          }
+        }
+        return rawValue;
+      }
+
+      function setupImporter(key) {
+        const csvFileInput = document.getElementById(`csvFile-${key}`);
+        const delimiterInput = document.getElementById(`delimiter-${key}`);
+        const parseBtn = document.getElementById(`parseBtn-${key}`);
+        const sqlBtn = document.getElementById(`sqlBtn-${key}`);
+        const clearBtn = document.getElementById(`clearBtn-${key}`);
+        const tableContainer = document.getElementById(`tableContainer-${key}`);
+        const errorEl = document.getElementById(`error-${key}`);
+        const sqlOutput = document.getElementById(`sqlOutput-${key}`);
+
+        function setError(message) {
+          errorEl.textContent = message || "";
+        }
+
+        function handleFile() {
+          setError("");
+          const file = csvFileInput.files[0];
+          if (!file) {
+            setError("Please select a CSV file.");
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const delimiter = delimiterInput.value || ",";
+            const rows = parseCSV(reader.result, delimiter);
+            if (rows.length === 0) {
+              setError("CSV is empty.");
+              return;
+            }
+            if (key === "accounts") {
+              state.accounts.headers = rows[0];
+              state.accounts.rows = rows.slice(1);
+              renderAccountsTable(rows);
+              const movementState = state.movements;
+              if (movementState.rows.length > 0) {
+                renderTable(
+                  [movementState.headers, ...movementState.rows],
+                  document.getElementById("tableContainer-movements"),
+                  movementDisplayValue
+                );
+              }
+              return;
+            }
+            if (key === "movements") {
+              state.movements.headers = rows[0];
+              state.movements.rows = rows.slice(1);
+              renderTable(rows, tableContainer, movementDisplayValue);
+              return;
+            }
+            renderTable(rows, tableContainer);
+          };
+          reader.onerror = () => setError("Unable to read CSV file.");
+          reader.readAsText(file);
+        }
+
+        parseBtn.addEventListener("click", handleFile);
+        csvFileInput.addEventListener("change", () => {
+          if (csvFileInput.files && csvFileInput.files.length > 0) {
+            handleFile();
+          }
+        });
+
+        clearBtn.addEventListener("click", () => {
+          csvFileInput.value = "";
+          tableContainer.innerHTML = "";
+          sqlOutput.value = "";
+          setError("");
+          if (key === "accounts") {
+            state.accounts.headers = [];
+            state.accounts.rows = [];
+            state.accounts.idToName.clear();
+            if (state.movements.rows.length > 0) {
+              renderTable(
+                [state.movements.headers, ...state.movements.rows],
+                document.getElementById("tableContainer-movements")
+              );
+            }
+          }
+          if (key === "movements") {
+            state.movements.headers = [];
+            state.movements.rows = [];
+          }
+        });
+
+        sqlBtn.addEventListener("click", () => {
+          setError("");
+          if (key === "accounts") {
+            if (state.accounts.rows.length === 0) {
+              setError("No parsed accounts. Parse a CSV first.");
+              return;
+            }
+            const result = generateAccountsSql(
+              state.accounts.headers,
+              state.accounts.rows
+            );
+            if (result.error) {
+              setError(result.error);
+              return;
+            }
+            sqlOutput.value = result.sql;
+            return;
+          }
+          if (key === "movements") {
+            if (state.movements.rows.length === 0) {
+              setError("No parsed movements. Parse a CSV first.");
+              return;
+            }
+            const result = generateMovementsSql(
+              state.movements.headers,
+              state.movements.rows
+            );
+            if (result.error) {
+              setError(result.error);
+              return;
+            }
+            sqlOutput.value = result.sql;
+          }
+        });
+      }
+
+      setupImporter("accounts");
+      setupImporter("movements");
+    </script>
+  </body>
+</html>
