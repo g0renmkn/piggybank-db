@@ -3,8 +3,8 @@
 
 CREATE TABLE IF NOT EXISTS bank_movements (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    account_id INT UNSIGNED NOT NULL,
     date DATETIME NOT NULL,
+    account_id INT UNSIGNED NOT NULL,
     category INT UNSIGNED NOT NULL,
     periodicity INT UNSIGNED NULL,
     description VARCHAR(255) NOT NULL,

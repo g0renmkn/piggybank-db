@@ -110,6 +110,7 @@
         border-radius: 8px;
         background: #211f2b;
         color: #c9c6d1;
+        box-sizing: border-box;
       }
       .tabs {
         display: flex;
@@ -279,18 +280,42 @@
           .replace(/[\s-]+/g, "_");
       }
 
-      function renderTable(rows, container, valueTransform) {
+      function applyMovementOrder(rows) {
+        if (rows.length === 0) {
+          return rows;
+        }
+        const headers = rows[0];
+        const normalized = headers.map(normalizeHeader);
+        const dateIndex = normalized.indexOf("date");
+        const accountIndex = normalized.indexOf("account_id");
+        if (dateIndex === -1 || accountIndex === -1 || dateIndex < accountIndex) {
+          return rows;
+        }
+        const reorderedHeaders = headers.slice();
+        reorderedHeaders[dateIndex] = headers[accountIndex];
+        reorderedHeaders[accountIndex] = headers[dateIndex];
+        const reorderedRows = rows.slice(1).map((row) => {
+          const nextRow = row.slice();
+          nextRow[dateIndex] = row[accountIndex];
+          nextRow[accountIndex] = row[dateIndex];
+          return nextRow;
+        });
+        return [reorderedHeaders, ...reorderedRows];
+      }
+
+      function renderTable(rows, container, valueTransform, headerOrder) {
         if (rows.length === 0) {
           container.innerHTML = "<p>No rows to display.</p>";
           return;
         }
         const rawHeaders = rows[0];
+        const displayHeaders = headerOrder || rawHeaders;
         const dataRows = rows.slice(1);
 
         const table = document.createElement("table");
         const thead = document.createElement("thead");
         const headerRow = document.createElement("tr");
-        rawHeaders.forEach((header) => {
+        displayHeaders.forEach((header) => {
           const th = document.createElement("th");
           th.textContent = header;
           headerRow.appendChild(th);
@@ -301,7 +326,8 @@
         const tbody = document.createElement("tbody");
         dataRows.forEach((row) => {
           const tr = document.createElement("tr");
-          rawHeaders.forEach((header, idx) => {
+          displayHeaders.forEach((header) => {
+            const idx = rawHeaders.indexOf(header);
             const td = document.createElement("td");
             const rawValue = row[idx] || "";
             const displayValue = valueTransform
@@ -392,9 +418,24 @@
           const description = toSqlValue(row[descriptionIndex] || "");
           const value = toSqlValue(row[valueIndex] || "");
           const notes = notesIndex !== -1 ? toSqlValue(row[notesIndex] || "") : "NULL";
-          return `INSERT INTO bank_movements (account_id, date, category, periodicity, description, value, notes) VALUES (${accountId}, ${dateValue}, ${category}, ${periodicity}, ${description}, ${value}, ${notes});`;
+          return `INSERT INTO bank_movements (date, account_id, category, periodicity, description, value, notes) VALUES (${dateValue}, ${accountId}, ${category}, ${periodicity}, ${description}, ${value}, ${notes});`;
         });
         return { sql: lines.join("\n"), error: "" };
+      }
+
+      function reorderHeaders(headers, first, second) {
+        const normalized = headers.map(normalizeHeader);
+        const firstIndex = normalized.indexOf(first);
+        const secondIndex = normalized.indexOf(second);
+        if (firstIndex === -1 || secondIndex === -1) {
+          return headers;
+        }
+        const reordered = headers.slice();
+        const firstHeader = reordered[firstIndex];
+        const secondHeader = reordered[secondIndex];
+        reordered[firstIndex] = secondHeader;
+        reordered[secondIndex] = firstHeader;
+        return reordered;
       }
 
       function renderAccountsTable(rawRows) {
@@ -504,9 +545,20 @@
               return;
             }
             if (key === "movements") {
-              state.movements.headers = rows[0];
-              state.movements.rows = rows.slice(1);
-              renderTable(rows, tableContainer, movementDisplayValue);
+              const orderedRows = applyMovementOrder(rows);
+              state.movements.headers = orderedRows[0];
+              state.movements.rows = orderedRows.slice(1);
+              const displayHeaders = reorderHeaders(
+                state.movements.headers,
+                "date",
+                "account_id"
+              );
+              renderTable(
+                orderedRows,
+                tableContainer,
+                movementDisplayValue,
+                displayHeaders
+              );
               return;
             }
             renderTable(rows, tableContainer);
@@ -532,9 +584,16 @@
             state.accounts.rows = [];
             state.accounts.idToName.clear();
             if (state.movements.rows.length > 0) {
+              const displayHeaders = reorderHeaders(
+                state.movements.headers,
+                "date",
+                "account_id"
+              );
               renderTable(
                 [state.movements.headers, ...state.movements.rows],
-                document.getElementById("tableContainer-movements")
+                document.getElementById("tableContainer-movements"),
+                null,
+                displayHeaders
               );
             }
           }
