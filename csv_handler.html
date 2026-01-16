@@ -63,6 +63,31 @@
         background: #211f2b;
         color: #c9c6d1;
       }
+      select {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid #3a3646;
+        border-radius: 8px;
+        background: #211f2b;
+        color: #c9c6d1;
+        font-size: 13px;
+        appearance: none;
+        background-image:
+          linear-gradient(45deg, transparent 50%, #9a96a8 50%),
+          linear-gradient(135deg, #9a96a8 50%, transparent 50%),
+          linear-gradient(to right, #2b2636, #2b2636);
+        background-position:
+          calc(100% - 16px) 50%,
+          calc(100% - 11px) 50%,
+          100% 0;
+        background-size: 5px 5px, 5px 5px, 2.5em 100%;
+        background-repeat: no-repeat;
+      }
+      select:focus {
+        outline: none;
+        border-color: #5b546b;
+        box-shadow: 0 0 0 2px rgba(139, 134, 163, 0.25);
+      }
       button {
         border: 1px solid #4a4458;
         background: #2b2636;
@@ -359,7 +384,14 @@
         return [reorderedHeaders, ...reorderedRows];
       }
 
-      function renderTable(rows, container, valueTransform, headerOrder) {
+      function renderTable(
+        rows,
+        container,
+        valueTransform,
+        headerOrder,
+        onCellEdit,
+        selectProvider
+      ) {
         if (rows.length === 0) {
           container.innerHTML = "<p>No rows to display.</p>";
           return;
@@ -380,7 +412,7 @@
         table.appendChild(thead);
 
         const tbody = document.createElement("tbody");
-        dataRows.forEach((row) => {
+        dataRows.forEach((row, rowIndex) => {
           const tr = document.createElement("tr");
           displayHeaders.forEach((header) => {
             const idx = rawHeaders.indexOf(header);
@@ -389,7 +421,37 @@
             const displayValue = valueTransform
               ? valueTransform(header, rawValue)
               : rawValue;
-            td.textContent = displayValue;
+            const options = selectProvider ? selectProvider(header) : null;
+            if (options && options.length > 0) {
+              const select = document.createElement("select");
+              options.forEach((option) => {
+                const opt = document.createElement("option");
+                opt.value = option.value;
+                opt.textContent = option.label;
+                select.appendChild(opt);
+              });
+              const currentValue = rawValue.trim();
+              if (currentValue !== "" && !options.some((o) => o.value === currentValue)) {
+                const opt = document.createElement("option");
+                opt.value = currentValue;
+                opt.textContent = currentValue;
+                select.appendChild(opt);
+              }
+              select.value = currentValue || options[0].value;
+              select.addEventListener("change", () => {
+                onCellEdit?.(rowIndex, idx, select.value);
+              });
+              td.appendChild(select);
+            } else {
+              td.textContent = displayValue;
+              if (onCellEdit && isEditableText(header, rawValue)) {
+                td.contentEditable = "true";
+                td.addEventListener("blur", () => {
+                  const nextValue = td.textContent ?? "";
+                  onCellEdit(rowIndex, idx, nextValue);
+                });
+              }
+            }
             tr.appendChild(td);
           });
           tbody.appendChild(tr);
@@ -421,6 +483,21 @@
           /^\d{4}-\d{2}-\d{2}$/.test(value) ||
           /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(value)
         );
+      }
+
+      function isEditableText(header, value) {
+        const normalizedHeader = normalizeHeader(header);
+        if (
+          normalizedHeader === "id" ||
+          normalizedHeader === "account_id" ||
+          normalizedHeader === "category" ||
+          normalizedHeader === "category_id" ||
+          normalizedHeader === "periodicity" ||
+          normalizedHeader === "periodicity_id"
+        ) {
+          return true;
+        }
+        return true;
       }
 
       function buildCsvText(headers, rows, delimiter) {
@@ -618,9 +695,27 @@
         dataRows.forEach((row, index) => {
           const tr = document.createElement("tr");
           const displayRow = [String(index + 1), ...row];
-          displayHeaders.forEach((_, idx) => {
+          displayHeaders.forEach((header, idx) => {
             const td = document.createElement("td");
             td.textContent = displayRow[idx] || "";
+            if (idx > 0 && isEditableText(header, displayRow[idx] || "")) {
+              td.contentEditable = "true";
+              td.addEventListener("blur", () => {
+                const updated = td.textContent ?? "";
+                const rowIndex = index;
+                const rawIndex = idx - 1;
+                state.accounts.rows[rowIndex][rawIndex] = updated;
+                if (rawIndex === nameIndex) {
+                  const idValue = String(rowIndex + 1);
+                  if (updated.trim()) {
+                    state.accounts.idToName.set(idValue, updated.trim());
+                  } else {
+                    state.accounts.idToName.delete(idValue);
+                  }
+                  refreshMovementsTable();
+                }
+              });
+            }
             tr.appendChild(td);
           });
           tbody.appendChild(tr);
@@ -670,9 +765,27 @@
         dataRows.forEach((row, index) => {
           const tr = document.createElement("tr");
           const displayRow = [String(index + 1), ...row];
-          displayHeaders.forEach((_, idx) => {
+          displayHeaders.forEach((header, idx) => {
             const td = document.createElement("td");
             td.textContent = displayRow[idx] || "";
+            if (idx > 0 && isEditableText(header, displayRow[idx] || "")) {
+              td.contentEditable = "true";
+              td.addEventListener("blur", () => {
+                const updated = td.textContent ?? "";
+                const rowIndex = index;
+                const rawIndex = idx - 1;
+                state.categories.rows[rowIndex][rawIndex] = updated;
+                if (rawIndex === nameIndex) {
+                  const idValue = String(rowIndex + 1);
+                  if (updated.trim()) {
+                    state.categories.idToName.set(idValue, updated.trim());
+                  } else {
+                    state.categories.idToName.delete(idValue);
+                  }
+                  refreshMovementsTable();
+                }
+              });
+            }
             tr.appendChild(td);
           });
           tbody.appendChild(tr);
@@ -722,9 +835,27 @@
         dataRows.forEach((row, index) => {
           const tr = document.createElement("tr");
           const displayRow = [String(index + 1), ...row];
-          displayHeaders.forEach((_, idx) => {
+          displayHeaders.forEach((header, idx) => {
             const td = document.createElement("td");
             td.textContent = displayRow[idx] || "";
+            if (idx > 0 && isEditableText(header, displayRow[idx] || "")) {
+              td.contentEditable = "true";
+              td.addEventListener("blur", () => {
+                const updated = td.textContent ?? "";
+                const rowIndex = index;
+                const rawIndex = idx - 1;
+                state.periodicities.rows[rowIndex][rawIndex] = updated;
+                if (rawIndex === nameIndex) {
+                  const idValue = String(rowIndex + 1);
+                  if (updated.trim()) {
+                    state.periodicities.idToName.set(idValue, updated.trim());
+                  } else {
+                    state.periodicities.idToName.delete(idValue);
+                  }
+                  refreshMovementsTable();
+                }
+              });
+            }
             tr.appendChild(td);
           });
           tbody.appendChild(tr);
@@ -758,6 +889,57 @@
           }
         }
         return rawValue;
+      }
+
+      function getIdOptions(header) {
+        const normalizedHeader = normalizeHeader(header);
+        if (normalizedHeader === "account_id") {
+          return Array.from(state.accounts.idToName.entries()).map(([value, label]) => ({
+            value,
+            label,
+          }));
+        }
+        if (normalizedHeader === "category" || normalizedHeader === "category_id") {
+          return Array.from(state.categories.idToName.entries()).map(
+            ([value, label]) => ({
+              value,
+              label,
+            })
+          );
+        }
+        if (
+          normalizedHeader === "periodicity" ||
+          normalizedHeader === "periodicity_id"
+        ) {
+          return Array.from(state.periodicities.idToName.entries()).map(
+            ([value, label]) => ({
+              value,
+              label,
+            })
+          );
+        }
+        return null;
+      }
+
+      function refreshMovementsTable() {
+        if (state.movements.rows.length === 0) {
+          return;
+        }
+        const displayHeaders = reorderHeaders(
+          state.movements.headers,
+          "date",
+          "account_id"
+        );
+        renderTable(
+          [state.movements.headers, ...state.movements.rows],
+          document.getElementById("tableContainer-movements"),
+          movementDisplayValue,
+          displayHeaders,
+          (rowIndex, colIndex, nextValue) => {
+            state.movements.rows[rowIndex][colIndex] = nextValue;
+          },
+          getIdOptions
+        );
       }
 
       function setupImporter(key) {
@@ -796,11 +978,7 @@
               renderAccountsTable(rows);
               const movementState = state.movements;
               if (movementState.rows.length > 0) {
-                renderTable(
-                  [movementState.headers, ...movementState.rows],
-                  document.getElementById("tableContainer-movements"),
-                  movementDisplayValue
-                );
+                refreshMovementsTable();
               }
               return;
             }
@@ -810,11 +988,7 @@
               renderCategoriesTable(rows);
               const movementState = state.movements;
               if (movementState.rows.length > 0) {
-                renderTable(
-                  [movementState.headers, ...movementState.rows],
-                  document.getElementById("tableContainer-movements"),
-                  movementDisplayValue
-                );
+                refreshMovementsTable();
               }
               return;
             }
@@ -824,11 +998,7 @@
               renderPeriodicitiesTable(rows);
               const movementState = state.movements;
               if (movementState.rows.length > 0) {
-                renderTable(
-                  [movementState.headers, ...movementState.rows],
-                  document.getElementById("tableContainer-movements"),
-                  movementDisplayValue
-                );
+                refreshMovementsTable();
               }
               return;
             }
@@ -845,7 +1015,11 @@
                 orderedRows,
                 tableContainer,
                 movementDisplayValue,
-                displayHeaders
+                displayHeaders,
+                (rowIndex, colIndex, nextValue) => {
+                  state.movements.rows[rowIndex][colIndex] = nextValue;
+                },
+                getIdOptions
               );
               return;
             }
@@ -872,17 +1046,7 @@
             state.accounts.rows = [];
             state.accounts.idToName.clear();
             if (state.movements.rows.length > 0) {
-              const displayHeaders = reorderHeaders(
-                state.movements.headers,
-                "date",
-                "account_id"
-              );
-              renderTable(
-                [state.movements.headers, ...state.movements.rows],
-                document.getElementById("tableContainer-movements"),
-                null,
-                displayHeaders
-              );
+              refreshMovementsTable();
             }
           }
           if (key === "categories") {
@@ -890,17 +1054,7 @@
             state.categories.rows = [];
             state.categories.idToName.clear();
             if (state.movements.rows.length > 0) {
-              const displayHeaders = reorderHeaders(
-                state.movements.headers,
-                "date",
-                "account_id"
-              );
-              renderTable(
-                [state.movements.headers, ...state.movements.rows],
-                document.getElementById("tableContainer-movements"),
-                null,
-                displayHeaders
-              );
+              refreshMovementsTable();
             }
           }
           if (key === "periodicities") {
@@ -908,17 +1062,7 @@
             state.periodicities.rows = [];
             state.periodicities.idToName.clear();
             if (state.movements.rows.length > 0) {
-              const displayHeaders = reorderHeaders(
-                state.movements.headers,
-                "date",
-                "account_id"
-              );
-              renderTable(
-                [state.movements.headers, ...state.movements.rows],
-                document.getElementById("tableContainer-movements"),
-                null,
-                displayHeaders
-              );
+              refreshMovementsTable();
             }
           }
           if (key === "movements") {
