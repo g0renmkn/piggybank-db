@@ -118,6 +118,12 @@
         background: #262233;
         color: #cfd9ff;
       }
+      .value-positive {
+        color: #7cd39b;
+      }
+      .value-negative {
+        color: #f08aa1;
+      }
       .error {
         color: #e8a7c5;
         margin-top: 8px;
@@ -444,11 +450,33 @@
               td.appendChild(select);
             } else {
               td.textContent = displayValue;
+              const normalizedHeader = normalizeHeader(header);
+              if (normalizedHeader === "value") {
+                const trimmedValue = rawValue.trim();
+                if (trimmedValue !== "" && isNumericValue(trimmedValue)) {
+                  td.classList.toggle("value-negative", Number(trimmedValue) < 0);
+                  td.classList.toggle("value-positive", Number(trimmedValue) >= 0);
+                }
+              }
               if (onCellEdit && isEditableText(header, rawValue)) {
                 td.contentEditable = "true";
+                td.addEventListener("keydown", (event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    td.blur();
+                  }
+                });
                 td.addEventListener("blur", () => {
                   const nextValue = td.textContent ?? "";
                   onCellEdit(rowIndex, idx, nextValue);
+                  if (normalizedHeader === "value") {
+                    const trimmedValue = nextValue.trim();
+                    td.classList.remove("value-negative", "value-positive");
+                    if (trimmedValue !== "" && isNumericValue(trimmedValue)) {
+                      td.classList.toggle("value-negative", Number(trimmedValue) < 0);
+                      td.classList.toggle("value-positive", Number(trimmedValue) >= 0);
+                    }
+                  }
                 });
               }
             }
@@ -700,6 +728,12 @@
             td.textContent = displayRow[idx] || "";
             if (idx > 0 && isEditableText(header, displayRow[idx] || "")) {
               td.contentEditable = "true";
+              td.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  td.blur();
+                }
+              });
               td.addEventListener("blur", () => {
                 const updated = td.textContent ?? "";
                 const rowIndex = index;
@@ -770,6 +804,12 @@
             td.textContent = displayRow[idx] || "";
             if (idx > 0 && isEditableText(header, displayRow[idx] || "")) {
               td.contentEditable = "true";
+              td.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  td.blur();
+                }
+              });
               td.addEventListener("blur", () => {
                 const updated = td.textContent ?? "";
                 const rowIndex = index;
@@ -840,6 +880,12 @@
             td.textContent = displayRow[idx] || "";
             if (idx > 0 && isEditableText(header, displayRow[idx] || "")) {
               td.contentEditable = "true";
+              td.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  td.blur();
+                }
+              });
               td.addEventListener("blur", () => {
                 const updated = td.textContent ?? "";
                 const rowIndex = index;
