@@ -143,6 +143,16 @@
         color: #c9c6d1;
         box-sizing: border-box;
       }
+      .add-row {
+        margin-top: 8px;
+      }
+      .add-row button {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        font-size: 18px;
+        line-height: 1;
+      }
       .tabs {
         display: flex;
         gap: 8px;
@@ -204,6 +214,7 @@
 
         <div id="error-accounts" class="error"></div>
         <div id="tableContainer-accounts"></div>
+        <div id="addRowContainer-accounts"></div>
         <div class="panel">
           <h2>Output</h2>
           <textarea id="sqlOutput-accounts" readonly></textarea>
@@ -223,6 +234,7 @@
 
         <div id="error-movements" class="error"></div>
         <div id="tableContainer-movements"></div>
+        <div id="addRowContainer-movements"></div>
         <div class="panel">
           <h2>Output</h2>
           <textarea id="sqlOutput-movements" readonly></textarea>
@@ -242,6 +254,7 @@
 
         <div id="error-categories" class="error"></div>
         <div id="tableContainer-categories"></div>
+        <div id="addRowContainer-categories"></div>
         <div class="panel">
           <h2>Output</h2>
           <textarea id="sqlOutput-categories" readonly></textarea>
@@ -261,6 +274,7 @@
 
         <div id="error-periodicities" class="error"></div>
         <div id="tableContainer-periodicities"></div>
+        <div id="addRowContainer-periodicities"></div>
         <div class="panel">
           <h2>Output</h2>
           <textarea id="sqlOutput-periodicities" readonly></textarea>
@@ -487,6 +501,23 @@
         table.appendChild(tbody);
         container.innerHTML = "";
         container.appendChild(table);
+      }
+
+      function renderAddRowButton(containerId, onAdd) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+          return;
+        }
+        container.innerHTML = "";
+        const wrapper = document.createElement("div");
+        wrapper.className = "add-row";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "+";
+        button.title = "Add row";
+        button.addEventListener("click", onAdd);
+        wrapper.appendChild(button);
+        container.appendChild(wrapper);
       }
 
       function escapeCsvCell(value, delimiter, forceQuotes) {
@@ -757,6 +788,11 @@
         table.appendChild(tbody);
         container.innerHTML = "";
         container.appendChild(table);
+        renderAddRowButton("addRowContainer-accounts", () => {
+          const emptyRow = rawHeaders.map(() => "");
+          state.accounts.rows.push(emptyRow);
+          renderAccountsTable([rawHeaders, ...state.accounts.rows]);
+        });
       }
 
       function renderCategoriesTable(rawRows) {
@@ -833,6 +869,11 @@
         table.appendChild(tbody);
         container.innerHTML = "";
         container.appendChild(table);
+        renderAddRowButton("addRowContainer-categories", () => {
+          const emptyRow = rawHeaders.map(() => "");
+          state.categories.rows.push(emptyRow);
+          renderCategoriesTable([rawHeaders, ...state.categories.rows]);
+        });
       }
 
       function renderPeriodicitiesTable(rawRows) {
@@ -909,6 +950,11 @@
         table.appendChild(tbody);
         container.innerHTML = "";
         container.appendChild(table);
+        renderAddRowButton("addRowContainer-periodicities", () => {
+          const emptyRow = rawHeaders.map(() => "");
+          state.periodicities.rows.push(emptyRow);
+          renderPeriodicitiesTable([rawHeaders, ...state.periodicities.rows]);
+        });
       }
 
       function movementDisplayValue(header, rawValue) {
@@ -986,6 +1032,11 @@
           },
           getIdOptions
         );
+        renderAddRowButton("addRowContainer-movements", () => {
+          const emptyRow = state.movements.headers.map(() => "");
+          state.movements.rows.push(emptyRow);
+          refreshMovementsTable();
+        });
       }
 
       function setupImporter(key) {
@@ -1067,6 +1118,11 @@
                 },
                 getIdOptions
               );
+              renderAddRowButton("addRowContainer-movements", () => {
+                const emptyRow = state.movements.headers.map(() => "");
+                state.movements.rows.push(emptyRow);
+                refreshMovementsTable();
+              });
               return;
             }
             renderTable(rows, tableContainer);
@@ -1091,6 +1147,7 @@
             state.accounts.headers = [];
             state.accounts.rows = [];
             state.accounts.idToName.clear();
+            document.getElementById("addRowContainer-accounts").innerHTML = "";
             if (state.movements.rows.length > 0) {
               refreshMovementsTable();
             }
@@ -1099,6 +1156,7 @@
             state.categories.headers = [];
             state.categories.rows = [];
             state.categories.idToName.clear();
+            document.getElementById("addRowContainer-categories").innerHTML = "";
             if (state.movements.rows.length > 0) {
               refreshMovementsTable();
             }
@@ -1107,6 +1165,7 @@
             state.periodicities.headers = [];
             state.periodicities.rows = [];
             state.periodicities.idToName.clear();
+            document.getElementById("addRowContainer-periodicities").innerHTML = "";
             if (state.movements.rows.length > 0) {
               refreshMovementsTable();
             }
@@ -1114,6 +1173,7 @@
           if (key === "movements") {
             state.movements.headers = [];
             state.movements.rows = [];
+            document.getElementById("addRowContainer-movements").innerHTML = "";
           }
         });
 
