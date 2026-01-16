@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CSV Accounts & Movements Viewer</title>
+    <title>CSV Accounts, Categories & Movements Viewer</title>
     <style>
       body {
         font-family: "Inter", "Segoe UI", Arial, sans-serif;
@@ -140,7 +140,7 @@
   </head>
   <body>
     <div class="page">
-      <h1>CSV Accounts & Movements Viewer</h1>
+      <h1>CSV Accounts, Categories & Movements Viewer</h1>
       <p class="note">
         Load CSV files and view parsed data. Accounts get incremental IDs.
       </p>
@@ -148,6 +148,9 @@
       <div class="tabs">
         <button type="button" class="tab-button active" data-tab="accounts">
           Accounts
+        </button>
+        <button type="button" class="tab-button" data-tab="categories">
+          Categories
         </button>
         <button type="button" class="tab-button" data-tab="movements">
           Movements
@@ -189,11 +192,34 @@
           <textarea id="sqlOutput-movements" readonly></textarea>
         </div>
       </section>
+
+      <section id="tab-categories" class="tab-content">
+        <div class="controls">
+          <input type="file" id="csvFile-categories" accept=".csv,text/csv" />
+          <label for="delimiter-categories">Delimiter:</label>
+          <input type="text" id="delimiter-categories" value="," maxlength="1" />
+          <button type="button" id="parseBtn-categories">Parse CSV</button>
+          <button type="button" id="sqlBtn-categories">Generate SQL</button>
+          <button type="button" id="clearBtn-categories">Clear</button>
+        </div>
+
+        <div id="error-categories" class="error"></div>
+        <div id="tableContainer-categories"></div>
+        <div class="panel">
+          <h2>Generated SQL</h2>
+          <textarea id="sqlOutput-categories" readonly></textarea>
+        </div>
+      </section>
     </div>
 
     <script>
       const state = {
         accounts: {
+          headers: [],
+          rows: [],
+          idToName: new Map(),
+        },
+        categories: {
           headers: [],
           rows: [],
           idToName: new Map(),
@@ -423,6 +449,27 @@
         return { sql: lines.join("\n"), error: "" };
       }
 
+      function generateCategoriesSql(headers, rows) {
+        const normalizedHeaders = headers.map(normalizeHeader);
+        const nameIndex = normalizedHeaders.indexOf("name");
+        const descriptionIndex = normalizedHeaders.indexOf("description");
+
+        if (nameIndex === -1) {
+          return {
+            sql: "",
+            error: "Categories CSV must include name.",
+          };
+        }
+
+        const lines = rows.map((row) => {
+          const name = toSqlValue(row[nameIndex] || "");
+          const description =
+            descriptionIndex !== -1 ? toSqlValue(row[descriptionIndex] || "") : "NULL";
+          return `INSERT INTO data_mov_categories (name, description) VALUES (${name}, ${description});`;
+        });
+        return { sql: lines.join("\n"), error: "" };
+      }
+
       function reorderHeaders(headers, first, second) {
         const normalized = headers.map(normalizeHeader);
         const firstIndex = normalized.indexOf(first);
@@ -490,12 +537,70 @@
         container.appendChild(table);
       }
 
+      function renderCategoriesTable(rawRows) {
+        const container = document.getElementById("tableContainer-categories");
+        if (rawRows.length === 0) {
+          container.innerHTML = "<p>No rows to display.</p>";
+          return;
+        }
+        const rawHeaders = rawRows[0];
+        const dataRows = rawRows.slice(1);
+        const normalizedHeaders = rawHeaders.map(normalizeHeader);
+        const nameIndex = normalizedHeaders.indexOf("name");
+
+        const displayHeaders = ["id"];
+        rawHeaders.forEach((header) => {
+          displayHeaders.push(header);
+        });
+
+        state.categories.idToName.clear();
+        dataRows.forEach((row, index) => {
+          const idValue = String(index + 1);
+          const nameValue = nameIndex !== -1 ? (row[nameIndex] || "").trim() : "";
+          if (nameValue) {
+            state.categories.idToName.set(idValue, nameValue);
+          }
+        });
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        displayHeaders.forEach((header) => {
+          const th = document.createElement("th");
+          th.textContent = header;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        dataRows.forEach((row, index) => {
+          const tr = document.createElement("tr");
+          const displayRow = [String(index + 1), ...row];
+          displayHeaders.forEach((_, idx) => {
+            const td = document.createElement("td");
+            td.textContent = displayRow[idx] || "";
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.innerHTML = "";
+        container.appendChild(table);
+      }
+
       function movementDisplayValue(header, rawValue) {
         const normalizedHeader = normalizeHeader(header);
         if (normalizedHeader === "account_id") {
           const key = rawValue.trim();
           if (state.accounts.idToName.has(key)) {
             return state.accounts.idToName.get(key);
+          }
+        }
+        if (normalizedHeader === "category" || normalizedHeader === "category_id") {
+          const key = rawValue.trim();
+          if (state.categories.idToName.has(key)) {
+            return state.categories.idToName.get(key);
           }
         }
         return rawValue;
@@ -534,6 +639,20 @@
               state.accounts.headers = rows[0];
               state.accounts.rows = rows.slice(1);
               renderAccountsTable(rows);
+              const movementState = state.movements;
+              if (movementState.rows.length > 0) {
+                renderTable(
+                  [movementState.headers, ...movementState.rows],
+                  document.getElementById("tableContainer-movements"),
+                  movementDisplayValue
+                );
+              }
+              return;
+            }
+            if (key === "categories") {
+              state.categories.headers = rows[0];
+              state.categories.rows = rows.slice(1);
+              renderCategoriesTable(rows);
               const movementState = state.movements;
               if (movementState.rows.length > 0) {
                 renderTable(
@@ -597,6 +716,24 @@
               );
             }
           }
+          if (key === "categories") {
+            state.categories.headers = [];
+            state.categories.rows = [];
+            state.categories.idToName.clear();
+            if (state.movements.rows.length > 0) {
+              const displayHeaders = reorderHeaders(
+                state.movements.headers,
+                "date",
+                "account_id"
+              );
+              renderTable(
+                [state.movements.headers, ...state.movements.rows],
+                document.getElementById("tableContainer-movements"),
+                null,
+                displayHeaders
+              );
+            }
+          }
           if (key === "movements") {
             state.movements.headers = [];
             state.movements.rows = [];
@@ -636,10 +773,26 @@
             }
             sqlOutput.value = result.sql;
           }
+          if (key === "categories") {
+            if (state.categories.rows.length === 0) {
+              setError("No parsed categories. Parse a CSV first.");
+              return;
+            }
+            const result = generateCategoriesSql(
+              state.categories.headers,
+              state.categories.rows
+            );
+            if (result.error) {
+              setError(result.error);
+              return;
+            }
+            sqlOutput.value = result.sql;
+          }
         });
       }
 
       setupImporter("accounts");
+      setupImporter("categories");
       setupImporter("movements");
     </script>
   </body>
