@@ -152,6 +152,9 @@
         <button type="button" class="tab-button" data-tab="categories">
           Categories
         </button>
+        <button type="button" class="tab-button" data-tab="periodicities">
+          Periodicities
+        </button>
         <button type="button" class="tab-button" data-tab="movements">
           Movements
         </button>
@@ -210,6 +213,24 @@
           <textarea id="sqlOutput-categories" readonly></textarea>
         </div>
       </section>
+
+      <section id="tab-periodicities" class="tab-content">
+        <div class="controls">
+          <input type="file" id="csvFile-periodicities" accept=".csv,text/csv" />
+          <label for="delimiter-periodicities">Delimiter:</label>
+          <input type="text" id="delimiter-periodicities" value="," maxlength="1" />
+          <button type="button" id="parseBtn-periodicities">Parse CSV</button>
+          <button type="button" id="sqlBtn-periodicities">Generate SQL</button>
+          <button type="button" id="clearBtn-periodicities">Clear</button>
+        </div>
+
+        <div id="error-periodicities" class="error"></div>
+        <div id="tableContainer-periodicities"></div>
+        <div class="panel">
+          <h2>Generated SQL</h2>
+          <textarea id="sqlOutput-periodicities" readonly></textarea>
+        </div>
+      </section>
     </div>
 
     <script>
@@ -220,6 +241,11 @@
           idToName: new Map(),
         },
         categories: {
+          headers: [],
+          rows: [],
+          idToName: new Map(),
+        },
+        periodicities: {
           headers: [],
           rows: [],
           idToName: new Map(),
@@ -470,6 +496,27 @@
         return { sql: lines.join("\n"), error: "" };
       }
 
+      function generatePeriodicitiesSql(headers, rows) {
+        const normalizedHeaders = headers.map(normalizeHeader);
+        const nameIndex = normalizedHeaders.indexOf("name");
+        const descriptionIndex = normalizedHeaders.indexOf("description");
+
+        if (nameIndex === -1) {
+          return {
+            sql: "",
+            error: "Periodicities CSV must include name.",
+          };
+        }
+
+        const lines = rows.map((row) => {
+          const name = toSqlValue(row[nameIndex] || "");
+          const description =
+            descriptionIndex !== -1 ? toSqlValue(row[descriptionIndex] || "") : "NULL";
+          return `INSERT INTO data_mov_periodicities (name, description) VALUES (${name}, ${description});`;
+        });
+        return { sql: lines.join("\n"), error: "" };
+      }
+
       function reorderHeaders(headers, first, second) {
         const normalized = headers.map(normalizeHeader);
         const firstIndex = normalized.indexOf(first);
@@ -589,6 +636,58 @@
         container.appendChild(table);
       }
 
+      function renderPeriodicitiesTable(rawRows) {
+        const container = document.getElementById("tableContainer-periodicities");
+        if (rawRows.length === 0) {
+          container.innerHTML = "<p>No rows to display.</p>";
+          return;
+        }
+        const rawHeaders = rawRows[0];
+        const dataRows = rawRows.slice(1);
+        const normalizedHeaders = rawHeaders.map(normalizeHeader);
+        const nameIndex = normalizedHeaders.indexOf("name");
+
+        const displayHeaders = ["id"];
+        rawHeaders.forEach((header) => {
+          displayHeaders.push(header);
+        });
+
+        state.periodicities.idToName.clear();
+        dataRows.forEach((row, index) => {
+          const idValue = String(index + 1);
+          const nameValue = nameIndex !== -1 ? (row[nameIndex] || "").trim() : "";
+          if (nameValue) {
+            state.periodicities.idToName.set(idValue, nameValue);
+          }
+        });
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        displayHeaders.forEach((header) => {
+          const th = document.createElement("th");
+          th.textContent = header;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        dataRows.forEach((row, index) => {
+          const tr = document.createElement("tr");
+          const displayRow = [String(index + 1), ...row];
+          displayHeaders.forEach((_, idx) => {
+            const td = document.createElement("td");
+            td.textContent = displayRow[idx] || "";
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.innerHTML = "";
+        container.appendChild(table);
+      }
+
       function movementDisplayValue(header, rawValue) {
         const normalizedHeader = normalizeHeader(header);
         if (normalizedHeader === "account_id") {
@@ -601,6 +700,15 @@
           const key = rawValue.trim();
           if (state.categories.idToName.has(key)) {
             return state.categories.idToName.get(key);
+          }
+        }
+        if (
+          normalizedHeader === "periodicity" ||
+          normalizedHeader === "periodicity_id"
+        ) {
+          const key = rawValue.trim();
+          if (state.periodicities.idToName.has(key)) {
+            return state.periodicities.idToName.get(key);
           }
         }
         return rawValue;
@@ -653,6 +761,20 @@
               state.categories.headers = rows[0];
               state.categories.rows = rows.slice(1);
               renderCategoriesTable(rows);
+              const movementState = state.movements;
+              if (movementState.rows.length > 0) {
+                renderTable(
+                  [movementState.headers, ...movementState.rows],
+                  document.getElementById("tableContainer-movements"),
+                  movementDisplayValue
+                );
+              }
+              return;
+            }
+            if (key === "periodicities") {
+              state.periodicities.headers = rows[0];
+              state.periodicities.rows = rows.slice(1);
+              renderPeriodicitiesTable(rows);
               const movementState = state.movements;
               if (movementState.rows.length > 0) {
                 renderTable(
@@ -734,6 +856,24 @@
               );
             }
           }
+          if (key === "periodicities") {
+            state.periodicities.headers = [];
+            state.periodicities.rows = [];
+            state.periodicities.idToName.clear();
+            if (state.movements.rows.length > 0) {
+              const displayHeaders = reorderHeaders(
+                state.movements.headers,
+                "date",
+                "account_id"
+              );
+              renderTable(
+                [state.movements.headers, ...state.movements.rows],
+                document.getElementById("tableContainer-movements"),
+                null,
+                displayHeaders
+              );
+            }
+          }
           if (key === "movements") {
             state.movements.headers = [];
             state.movements.rows = [];
@@ -788,11 +928,27 @@
             }
             sqlOutput.value = result.sql;
           }
+          if (key === "periodicities") {
+            if (state.periodicities.rows.length === 0) {
+              setError("No parsed periodicities. Parse a CSV first.");
+              return;
+            }
+            const result = generatePeriodicitiesSql(
+              state.periodicities.headers,
+              state.periodicities.rows
+            );
+            if (result.error) {
+              setError(result.error);
+              return;
+            }
+            sqlOutput.value = result.sql;
+          }
         });
       }
 
       setupImporter("accounts");
       setupImporter("categories");
+      setupImporter("periodicities");
       setupImporter("movements");
     </script>
   </body>
