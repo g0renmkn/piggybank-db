@@ -28,7 +28,7 @@ INSERT IGNORE INTO data_mov_categories (name, description) VALUES
 ('Transfer', 'Money transfers between accounts'),
 ('ATM Withdrawal', 'Cash withdrawals from ATM'),
 ('Charity', 'Donations and charitable contributions'),
-('Tax Payment', 'Tax payments and related expenses'),
+('Tax Payment', 'Tax payments and related expenses');
 
 
 -- ============================================================================
