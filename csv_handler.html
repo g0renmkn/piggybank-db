@@ -65,7 +65,7 @@
       }
       select {
         width: 100%;
-        padding: 6px 10px;
+        padding: 6px 32px 6px 10px;
         border: 1px solid #3a3646;
         border-radius: 8px;
         background: #211f2b;
@@ -77,8 +77,8 @@
           linear-gradient(135deg, #9a96a8 50%, transparent 50%),
           linear-gradient(to right, #2b2636, #2b2636);
         background-position:
-          calc(100% - 16px) 50%,
-          calc(100% - 11px) 50%,
+          calc(100% - 18px) 50%,
+          calc(100% - 13px) 50%,
           100% 0;
         background-size: 5px 5px, 5px 5px, 2.5em 100%;
         background-repeat: no-repeat;
@@ -461,6 +461,12 @@
               select.addEventListener("change", () => {
                 onCellEdit?.(rowIndex, idx, select.value);
               });
+              const maxLabelWidth = Math.max(
+                ...Array.from(select.options).map((opt) => {
+                  return measureTextWidth(opt.textContent || "", select);
+                })
+              );
+              select.style.minWidth = `${Math.ceil(maxLabelWidth + 60)}px`;
               td.appendChild(select);
             } else {
               td.textContent = displayValue;
@@ -518,6 +524,17 @@
         button.addEventListener("click", onAdd);
         wrapper.appendChild(button);
         container.appendChild(wrapper);
+      }
+
+      function measureTextWidth(text, element) {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          return text.length * 8;
+        }
+        const styles = window.getComputedStyle(element);
+        ctx.font = `${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
+        return ctx.measureText(text).width;
       }
 
       function escapeCsvCell(value, delimiter, forceQuotes) {
@@ -986,29 +1003,22 @@
       function getIdOptions(header) {
         const normalizedHeader = normalizeHeader(header);
         if (normalizedHeader === "account_id") {
-          return Array.from(state.accounts.idToName.entries()).map(([value, label]) => ({
-            value,
-            label,
-          }));
+          return Array.from(state.accounts.idToName.entries())
+            .map(([value, label]) => ({ value, label }))
+            .sort((a, b) => a.label.localeCompare(b.label));
         }
         if (normalizedHeader === "category" || normalizedHeader === "category_id") {
-          return Array.from(state.categories.idToName.entries()).map(
-            ([value, label]) => ({
-              value,
-              label,
-            })
-          );
+          return Array.from(state.categories.idToName.entries())
+            .map(([value, label]) => ({ value, label }))
+            .sort((a, b) => a.label.localeCompare(b.label));
         }
         if (
           normalizedHeader === "periodicity" ||
           normalizedHeader === "periodicity_id"
         ) {
-          return Array.from(state.periodicities.idToName.entries()).map(
-            ([value, label]) => ({
-              value,
-              label,
-            })
-          );
+          return Array.from(state.periodicities.idToName.entries())
+            .map(([value, label]) => ({ value, label }))
+            .sort((a, b) => a.label.localeCompare(b.label));
         }
         return null;
       }
